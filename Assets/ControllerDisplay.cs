@@ -151,7 +151,7 @@ public class ControllerDisplay : MonoBehaviour
 
     private IEnumerator StopVibratingAfter(Gamepad gamepad, float seconds)
     {
-        yield return new WaitForSeconds(seconds);
+        yield return new WaitForSecondsRealtime(seconds);
         gamepad.SetMotorSpeeds(0.0f, 0.0f);
         _currentlyVibrating = false;
         _timedVibrating = false;
