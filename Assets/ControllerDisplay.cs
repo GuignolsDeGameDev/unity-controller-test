@@ -1,17 +1,28 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
-using UnityEngine.UI;
+using UnityEngine.UIElements;
+using Slider = UnityEngine.UI.Slider;
 
 public class ControllerDisplay : MonoBehaviour
 {
     public Color overlayColor;
     public Slider leftMotorSlider;
     public Slider rightMotorSlider;
-    
+    public GameObject timeInputField;
+
+    private TextMeshProUGUI leftMotorSliderLabel;
+    private TextMeshProUGUI rightMotorSliderLabel;
+    private TMP_InputField timeInputFieldTextBox;
+    private GameObject rightTriggerInstructions;
+    private GameObject leftTriggerInstructions;
+
+    private bool _currentlyVibrating = false;
+    private bool _timedVibrating = false;
     private Dictionary<string, GameObject> _overlays;
     private string[] _buttonNames =
     {
@@ -49,6 +60,12 @@ public class ControllerDisplay : MonoBehaviour
             _overlays[buttonName].SetActive(false);
             _overlays[buttonName].GetComponent<SpriteRenderer>().color = overlayColor;
         }
+
+        leftMotorSliderLabel = GameObject.Find("Left Motor Label").GetComponent<TextMeshProUGUI>();
+        rightMotorSliderLabel = GameObject.Find("Right Motor Label").GetComponent<TextMeshProUGUI>();
+        rightTriggerInstructions = GameObject.Find("RT Instructions");
+        leftTriggerInstructions = GameObject.Find("LT Instructions");
+        timeInputFieldTextBox = timeInputField.GetComponent<TMP_InputField>();
     }
 
     private void Update()
@@ -87,12 +104,56 @@ public class ControllerDisplay : MonoBehaviour
         _overlays["RA_LEFT"].SetActive(gamepad.rightStick.left.isPressed);
         _overlays["RA_RIGHT"].SetActive(gamepad.rightStick.right.isPressed);
         _overlays["RA_UP"].SetActive(gamepad.rightStick.up.isPressed);
+
+        var leftMotorSpeed = leftMotorSlider.value;
+        var rightMotorSpeed = rightMotorSlider.value;
+        leftMotorSliderLabel.text = $"Left Motor: {leftMotorSpeed}";
+        rightMotorSliderLabel.text = $"Right Motor: {rightMotorSpeed}";
+
+        if (!_currentlyVibrating && gamepad[GamepadButton.LeftTrigger].isPressed)
+        {
+            gamepad.SetMotorSpeeds(leftMotorSpeed, rightMotorSpeed);
+            _currentlyVibrating = true;
+        } else if (_currentlyVibrating && !_timedVibrating && gamepad[GamepadButton.LeftTrigger].wasReleasedThisFrame)
+        {
+            _currentlyVibrating = false;
+            gamepad.SetMotorSpeeds(0.0f, 0.0f);
+        } else if (!_currentlyVibrating && !_timedVibrating && gamepad[GamepadButton.RightTrigger].wasPressedThisFrame)
+        {
+            float vibrationTime = 0.0f;
+            try
+            {
+                vibrationTime = float.Parse(timeInputFieldTextBox.text);
+            }
+            catch (Exception e)
+            {
+                Debug.Log(e);
+            }
+
+            if (vibrationTime > 0.0f && (leftMotorSpeed > 0.0f || rightMotorSpeed >0.0f))
+            {
+                gamepad.SetMotorSpeeds(leftMotorSpeed, rightMotorSpeed);
+                _currentlyVibrating = true;
+                _timedVibrating = true;
+                StartCoroutine(StopVibratingAfter(gamepad, vibrationTime));
+            }
+        }
         
-        gamepad.SetMotorSpeeds(leftMotorSlider.value, rightMotorSlider.value);
+        leftTriggerInstructions.SetActive(!_timedVibrating);
+        rightTriggerInstructions.SetActive(!_currentlyVibrating);
+        
     }
 
     public void doQuit()
     {
         Application.Quit();
+    }
+
+    private IEnumerator StopVibratingAfter(Gamepad gamepad, float seconds)
+    {
+        yield return new WaitForSeconds(seconds);
+        gamepad.SetMotorSpeeds(0.0f, 0.0f);
+        _currentlyVibrating = false;
+        _timedVibrating = false;
     }
 }
